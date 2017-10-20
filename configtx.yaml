@@ -24,15 +24,6 @@ Profiles:
                 Organizations:
                     - *Org1
                     - *Org2
-    ThreeOrgsOrdererGenesis:
-        Orderer:
-            <<: *OrdererDefaults
-            Organizations:
-                - *OrdererOrg
-        Consortiums:
-            SampleConsortium:
-                Organizations:
-                    - *Org3
     TwoOrgsChannel:
         Consortium: SampleConsortium
         Application:
