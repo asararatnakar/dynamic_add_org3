@@ -18,10 +18,11 @@ curl -X POST --data-binary @config_block.pb "$CONFIGTXLATOR_URL/protolator/decod
 
 jq .data.data[0].payload.data.config config_block.json > config.json
 
-cp config.json updated_config.json
+#cp config.json updated_config.json
 
 # TODO: add org3.json to updated_config.json
 ## TODO: DO this manually for now
+#### jq -s '.[0] * {"Org3MSP": .[1]}' config.json org3.json >& updated_config.json
 
 # Translating original config to proto
 
