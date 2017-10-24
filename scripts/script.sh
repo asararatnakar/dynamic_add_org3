@@ -152,8 +152,9 @@ joinChannel () {
 
 installChaincode () {
 	PEER=$1
+	version=$2
 	setGlobals $PEER
-	peer chaincode install -n mycc -v 1.0 -p github.com/hyperledger/fabric/examples/chaincode/go/chaincode_example02 >&log.txt
+	peer chaincode install -n mycc -v $version -p github.com/hyperledger/fabric/examples/chaincode/go/chaincode_example02 >&log.txt
 	res=$?
 	cat log.txt
         verifyResult $res "Chaincode installation on remote peer PEER$PEER has Failed"
@@ -167,9 +168,26 @@ instantiateChaincode () {
 	# while 'peer chaincode' command can get the orderer endpoint from the peer (if join was successful),
 	# lets supply it directly as we know it using the "-o" option
 	if [ -z "$CORE_PEER_TLS_ENABLED" -o "$CORE_PEER_TLS_ENABLED" = "false" ]; then
-		peer chaincode instantiate -o orderer.example.com:7050 -C $CHANNEL_NAME -n mycc -v 1.0 -c '{"Args":["init","a","100","b","200"]}' -P "OR	('Org1MSP.member','Org2MSP.member')" >&log.txt
+		peer chaincode instantiate -o orderer.example.com:7050 -C $CHANNEL_NAME -n mycc -v 0 -c '{"Args":["init","a","100","b","200"]}' -P "OR ('Org1MSP.member','Org2MSP.member')" >&log.txt
 	else
-		peer chaincode instantiate -o orderer.example.com:7050 --tls $CORE_PEER_TLS_ENABLED --cafile $ORDERER_CA -C $CHANNEL_NAME -n mycc -v 1.0 -c '{"Args":["init","a","100","b","200"]}' -P "OR	('Org1MSP.member','Org2MSP.member')" >&log.txt
+		peer chaincode instantiate -o orderer.example.com:7050 --tls $CORE_PEER_TLS_ENABLED --cafile $ORDERER_CA -C $CHANNEL_NAME -n mycc -v 0 -c '{"Args":["init","a","100","b","200"]}' -P "OR ('Org1MSP.member','Org2MSP.member')" >&log.txt
+	fi
+	res=$?
+	cat log.txt
+	verifyResult $res "Chaincode instantiation on PEER$PEER on channel '$CHANNEL_NAME' failed"
+	echo "===================== Chaincode Instantiation on PEER$PEER on channel '$CHANNEL_NAME' is successful ===================== "
+	echo
+}
+
+upgradeChaincode () {
+	PEER=$1
+	setGlobals $PEER
+	# while 'peer chaincode' command can get the orderer endpoint from the peer (if join was successful),
+	# lets supply it directly as we know it using the "-o" option
+	if [ -z "$CORE_PEER_TLS_ENABLED" -o "$CORE_PEER_TLS_ENABLED" = "false" ]; then
+		peer chaincode upgrade -o orderer.example.com:7050 -C $CHANNEL_NAME -n mycc -v 1 -c '{"Args":["init","a","90","b","210"]}' -P "OR ('Org1MSP.member','Org2MSP.member','Org3MSP.member')" >&log.txt
+	else
+		peer chaincode upgrade -o orderer.example.com:7050 --tls $CORE_PEER_TLS_ENABLED --cafile $ORDERER_CA -C $CHANNEL_NAME -n mycc -v 1 -c '{"Args":["init","a","90","b","210"]}' -P "OR ('Org1MSP.member','Org2MSP.member','Org3MSP.member')" >&log.txt
 	fi
 	res=$?
 	cat log.txt
@@ -302,18 +320,27 @@ addOrg3(){
 	peer channel join -b $CHANNEL_NAME".block" # Re using first one else you can get with fetch command
 	#peer channel fetch 0 config_block.pb -o orderer.example.com:7050 -c $CHANNEL_NAME --tls --cafile $ORDERER_CA
 
-	# Install chaincode on peer0 of Org3
-	decor "Install chaincode on peer0 of Org3"
-	installChaincode 4
-	# peer chaincode install -n mycc -v 1.0 -p github.com/hyperledger/fabric/examples/chaincode/go/chaincode_example02
-        sleep 10
-	### An invoke/ query should work to verify if the new org is successfully added to the bc network
-	decor "A verify check by querying on peer0 of Org3 "
+	# Upgrade chaincode on peers of orgs -> Org1, Org2 & Org3
+	decor "Upgrade chaincode on peers of orgs -> Org1, Org2 & Org3"
+
+
+	version=1
+	for ((i=0;i<5;i++)) ; do
+		installChaincode $i $version
+	done
+
+	## Upgrade chaincode
+	## NOTE: Org3 member can't do upgrade chaincodes
+	upgradeChaincode 0
+
+	decor "A quick verify check by querying on peer0 of Org3 "
 	chaincodeQuery 4 90
 
-	# chaincodeInvoke 4
+	decor "Ensure latest endorsement policy works by doing Invoke "
+	chaincodeInvoke 4
 
-	# chaincodeQuery 4 80
+	decor "Validate the results"
+	chaincodeQuery 4 80
 
 }
 
@@ -337,9 +364,10 @@ updateAnchorPeers 2
 
 ## Install chaincode on Peer0/Org1 and Peer2/Org2
 echo "Installing chaincode on org1/peer0..."
-installChaincode 0
+version=0
+installChaincode 0 $version
 echo "Install chaincode on org2/peer2..."
-installChaincode 2
+installChaincode 2 $version
 
 #Instantiate chaincode on Peer2/Org2
 echo "Instantiating chaincode on org2/peer2..."
@@ -355,7 +383,7 @@ chaincodeInvoke 0
 
 ## Install chaincode on Peer3/Org2
 echo "Installing chaincode on org2/peer3..."
-installChaincode 3
+installChaincode 3 $version
 
 #Query on chaincode on Peer3/Org2, check if the result is 90
 echo "Querying chaincode on org2/peer3..."
