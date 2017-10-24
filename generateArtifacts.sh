@@ -57,6 +57,13 @@ function generateCerts (){
 	echo "##########################################################"
 	$CRYPTOGEN generate --config=./crypto-config.yaml
 	echo
+
+        echo
+        echo "##########################################################"
+        echo "##### Generate certificates for Org3 using cryptogen tool #########"
+        echo "##########################################################"
+        $CRYPTOGEN generate --config=./crypto-org3.yaml
+        echo
 }
 
 ## Generate orderer genesis block , channel configuration transaction and anchor peer update transactions
@@ -94,13 +101,12 @@ function generateChannelArtifacts() {
 	echo "#######    Generating anchor peer update for Org2MSP   ##########"
 	echo "#################################################################"
 	$CONFIGTXGEN -profile TwoOrgsChannel -outputAnchorPeersUpdate ./channel-artifacts/Org2MSPanchors.tx -channelID $CHANNEL_NAME -asOrg Org2MSP
-	echo
 
 	echo
 	echo "#################################################################"
-	echo "#######    Generating JSON for new org  Org3MSP   ##########"
+	echo "#### Generating JSON for new org  Org3 using Configtxgen ########"
 	echo "#################################################################"
-	$CONFIGTXGEN -printOrg Org3MSP > ./scripts/org3.json
+	$CONFIGTXGEN -printOrg Org3MSP > ./channel-artifacts/org3.json
 	echo
 }
 

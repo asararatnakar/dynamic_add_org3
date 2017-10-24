@@ -5,7 +5,7 @@ This is same as **e2e_cli** sample avaiable in fabric repo.
 
 However if you wanted to add a new organization you would need to execute the following steps:
 
-* Generate certs for Org3 (Already included in **crypto-config.yaml**)
+* Generate certs for Org3 (check **crypto-org3.yaml**)
 * Calculate the configuration using configtxgen by including the following block in your configtx.yaml (Already included in configtx.yaml)
 
 ```
@@ -31,18 +31,11 @@ However if you wanted to add a new organization you would need to execute the fo
 ```
 configtxgen -printOrg Org3MSP
 ```
-* Once the e2e test excute with the following command
+* Once the Normal e2e test execution completed with the following command. i
+ it also adds new org **Org3** to the Blockchain network
 ```
-./network_setup.sh restart mychannel 1000000
+./network_setup.sh restart mychannel 1
 ```
-
-**Ctrl + D**  or   open a new terminal and enter into cli container `docker exec -it cli bash`
-
-Execute the commands available in **commands.sh** to understand what is happening here.
-
-* Added a new organization Org3
-* Installed chaincode on peer0 of Org3
-* Query on peer0 of Org3 and check for the value **Query Result: 90**
 
 
 

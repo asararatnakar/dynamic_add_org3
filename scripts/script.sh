@@ -10,7 +10,7 @@ echo "\___ \    | |     / _ \   | |_) |   | |    _____  |  _|     __) | |  _|  "
 echo " ___) |   | |    / ___ \  |  _ <    | |   |_____| | |___   / __/  | |___ "
 echo "|____/    |_|   /_/   \_\ |_| \_\   |_|           |_____| |_____| |_____|"
 echo
-apt update && apt -y install jq vim
+apt update && apt -y install jq
 
 CHANNEL_NAME="$1"
 : ${CHANNEL_NAME:="mychannel"}
@@ -41,7 +41,7 @@ setGlobals () {
 		else
 			CORE_PEER_ADDRESS=peer1.org1.example.com:7051
 		fi
-	else
+	elif [ $1 -eq 2 -o $1 -eq 3 ] ; then
 		CORE_PEER_LOCALMSPID="Org2MSP"
 		CORE_PEER_TLS_ROOTCERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org2.example.com/peers/peer0.org2.example.com/tls/ca.crt
 		CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org2.example.com/users/Admin@org2.example.com/msp
@@ -49,6 +49,15 @@ setGlobals () {
 			CORE_PEER_ADDRESS=peer0.org2.example.com:7051
 		else
 			CORE_PEER_ADDRESS=peer1.org2.example.com:7051
+		fi
+	else
+		CORE_PEER_LOCALMSPID="Org3MSP"
+		CORE_PEER_TLS_ROOTCERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org3.example.com/peers/peer0.org3.example.com/tls/ca.crt
+		CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org3.example.com/users/Admin@org3.example.com/msp
+		if [ $1 -eq 4 ]; then
+			CORE_PEER_ADDRESS=peer0.org3.example.com:7051
+		else
+			CORE_PEER_ADDRESS=peer1.org3.example.com:7051
 		fi
 	fi
 
@@ -214,6 +223,95 @@ chaincodeInvoke () {
 	echo "===================== Invoke transaction on PEER$PEER on channel '$CHANNEL_NAME' is successful ===================== "
 	echo
 }
+decor(){
+	printf "\n##################################"
+	printf "\n$1"
+	printf "\n##################################\n"
+}
+
+addOrg3(){
+	decor "\n ----- R E A L   F U N   B E G I N S   N O W ----- \n"
+	decor "Letz add Org3 to the 2-Org Blockchain network"
+	# Start configtxlator
+	decor "Start configtxlator"
+	configtxlator start &
+
+	export CONFIGTXLATOR_URL=http://127.0.0.1:7059
+
+  decor "Fetch latest config block and write that to config_block.pb"
+	peer channel fetch config config_block.pb -o orderer.example.com:7050 -c $CHANNEL_NAME --tls --cafile $ORDERER_CA
+
+	decor "Decode latest config block and write that to config_block.json"
+	# Decode the block to human readable json format
+	curl -X POST --data-binary @config_block.pb "$CONFIGTXLATOR_URL/protolator/decode/common.Block" | jq . > config_block.json
+
+	# Isolating current config
+	decor "Isolate the current config and write that to config.json"
+	jq .data.data[0].payload.data.config config_block.json > config.json
+
+	decor "append configtxgen PrintOrg ==> org3.json to config.json and write that to updated_config.json"
+	jq -s '.[0] * {"channel_group":{"groups":{"Application":{"groups": {"Org3MSP":.[1]}}}}}' config.json ./channel-artifacts/org3.json >& updated_config.json
+
+	# Translating original config to proto
+	decor "Translating original config to proto"
+	curl -X POST --data-binary @config.json "$CONFIGTXLATOR_URL/protolator/encode/common.Config" > config.pb
+
+	# Translating updated config to proto
+	decor "Translating updated config to proto"
+	curl -X POST --data-binary @updated_config.json "$CONFIGTXLATOR_URL/protolator/encode/common.Config" > updated_config.pb
+
+	# Computing config update
+	decor "Computing config update"
+	curl -X POST -F channel=$CHANNEL_NAME -F "original=@config.pb" -F "updated=@updated_config.pb" "${CONFIGTXLATOR_URL}/configtxlator/compute/update-from-configs" > config_update.pb
+
+	# Decoding config update
+	decor "Decoding config update"
+	curl -X POST --data-binary @config_update.pb "$CONFIGTXLATOR_URL/protolator/decode/common.ConfigUpdate" | jq . > config_update.json
+
+	# Generating config update envelope
+	decor "Generating config update envelope"
+	echo '{"payload":{"header":{"channel_header":{"channel_id":"'mychannel'", "type":2}},"data":{"config_update":'$(cat config_update.json)'}}}' | jq . > config_update_in_envelope.json
+
+	# Encoding config update envelope
+	decor "Encoding config update envelope"
+	curl -X POST --data-binary @config_update_in_envelope.json "$CONFIGTXLATOR_URL/protolator/encode/common.Envelope" > config_update_in_envelope.pb
+
+	# Sign with org1
+	setGlobals 0
+	decor "Sign the envelope with Org1 Admin"
+	peer channel signconfigtx -f config_update_in_envelope.pb
+
+	#switch to org2 -- so that org2 will sign the pb before updating the chnanel
+	setGlobals 2
+
+	#Sending config update to channel
+	decor "Sending config update to channel via Org2 Admin"
+	peer channel update -f config_update_in_envelope.pb -c $CHANNEL_NAME -o orderer.example.com:7050 --tls true --cafile /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem
+
+	## Fetch the latest block and join the peer of org3
+	#peer channel fetch config latest_config_block.pb -o orderer.example.com:7050 -c $CHANNEL_NAME --tls --cafile $ORDERER_CA
+	#curl -X POST --data-binary @latest_config_block.pb "$CONFIGTXLATOR_URL/protolator/decode/common.Block" | jq . > latest_config_block.json
+
+	## peer should join to the genesis block, but not the latest config block
+  ## If you try adding to the latest config block, you would see an error like below
+	##Error: proposal failed (err: rpc error: code = Unknown desc = chaincode error (status: 500, message: Cannot create ledger from genesis block, due to Expected block number=0, recived block number=3))
+
+	# join peer0 of Org3
+	decor "Switch to Org3 Admin and join peer0 of Org3 to the channel $CHANNEL_NAME"
+	setGlobals 4
+	peer channel join -b $CHANNEL_NAME".block" # Re using first one else you can get with fetch command
+	#peer channel fetch 0 config_block.pb -o orderer.example.com:7050 -c $CHANNEL_NAME --tls --cafile $ORDERER_CA
+
+	# Install chaincode on peer0 of Org3
+	decor "Install chaincode on peer0 of Org3"
+	installChaincode 4
+	# peer chaincode install -n mycc -v 1.0 -p github.com/hyperledger/fabric/examples/chaincode/go/chaincode_example02
+
+	### An invoke/ query should work to verify if the new org is successfully added to the bc network
+	decor "A verify check by querying on peer0 of Org3 "
+	chaincodeQuery 3 90
+	# peer chaincode query -C $CHANNEL_NAME -n mycc -c '{"Args":["query","a"]}'
+}
 
 ## Check for orderering service availablility
 echo "Check orderering service availability..."
@@ -228,10 +326,10 @@ echo "Having all peers join the channel..."
 joinChannel
 
 ## Set the anchor peers for each org in the channel
-#echo "Updating anchor peers for org1..."
-#updateAnchorPeers 0
-#echo "Updating anchor peers for org2..."
-#updateAnchorPeers 2
+echo "Updating anchor peers for org1..."
+updateAnchorPeers 0
+echo "Updating anchor peers for org2..."
+updateAnchorPeers 2
 
 ## Install chaincode on Peer0/Org1 and Peer2/Org2
 echo "Installing chaincode on org1/peer0..."
@@ -258,6 +356,9 @@ installChaincode 3
 #Query on chaincode on Peer3/Org2, check if the result is 90
 echo "Querying chaincode on org2/peer3..."
 chaincodeQuery 3 90
+
+# Adding a new organization org3 to the blockchain
+addOrg3
 
 echo
 echo "===================== All GOOD, End-2-End execution completed ===================== "

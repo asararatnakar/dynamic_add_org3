@@ -1,0 +1,11 @@
+PeerOrgs:
+  - Name: Org3
+    Domain: org3.example.com
+    CA:
+        Country: US
+        Province: California
+        Locality: San Francisco
+    Template:
+      Count: 2
+    Users:
+      Count: 1
