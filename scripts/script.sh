@@ -238,7 +238,7 @@ addOrg3(){
 
 	export CONFIGTXLATOR_URL=http://127.0.0.1:7059
 
-  decor "Fetch latest config block and write that to config_block.pb"
+	decor "Fetch latest config block and write that to config_block.pb"
 	peer channel fetch config config_block.pb -o orderer.example.com:7050 -c $CHANNEL_NAME --tls --cafile $ORDERER_CA
 
 	decor "Decode latest config block and write that to config_block.json"
@@ -270,7 +270,7 @@ addOrg3(){
 
 	# Generating config update envelope
 	decor "Generating config update envelope"
-	echo '{"payload":{"header":{"channel_header":{"channel_id":"'mychannel'", "type":2}},"data":{"config_update":'$(cat config_update.json)'}}}' | jq . > config_update_in_envelope.json
+	echo '{"payload":{"header":{"channel_header":{"channel_id":"mychannel", "type":2}},"data":{"config_update":'$(cat config_update.json)'}}}' | jq . > config_update_in_envelope.json
 
 	# Encoding config update envelope
 	decor "Encoding config update envelope"
@@ -293,7 +293,7 @@ addOrg3(){
 	#curl -X POST --data-binary @latest_config_block.pb "$CONFIGTXLATOR_URL/protolator/decode/common.Block" | jq . > latest_config_block.json
 
 	## peer should join to the genesis block, but not the latest config block
-  ## If you try adding to the latest config block, you would see an error like below
+	## If you try adding to the latest config block, you would see an error like below
 	##Error: proposal failed (err: rpc error: code = Unknown desc = chaincode error (status: 500, message: Cannot create ledger from genesis block, due to Expected block number=0, recived block number=3))
 
 	# join peer0 of Org3
@@ -306,11 +306,15 @@ addOrg3(){
 	decor "Install chaincode on peer0 of Org3"
 	installChaincode 4
 	# peer chaincode install -n mycc -v 1.0 -p github.com/hyperledger/fabric/examples/chaincode/go/chaincode_example02
-
+        sleep 10
 	### An invoke/ query should work to verify if the new org is successfully added to the bc network
 	decor "A verify check by querying on peer0 of Org3 "
-	chaincodeQuery 3 90
-	# peer chaincode query -C $CHANNEL_NAME -n mycc -c '{"Args":["query","a"]}'
+	chaincodeQuery 4 90
+
+	# chaincodeInvoke 4
+
+	# chaincodeQuery 4 80
+
 }
 
 ## Check for orderering service availablility
